@@ -1,0 +1,872 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Idle Forge Calculator</title>
+<meta name="theme-color" content="#b8642a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Idle Forge">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="application-name" content="Idle Forge Calc">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* v2. Layout: single phone column; tabs Rate / Resources / Smelters / Crafters; recipes are collapsible rows that open into an editor */
+:root{
+  --bg:#eef0f2; --panel:#ffffff; --ink:#1c2228; --muted:#5d6874; --line:#d5dbe1;
+  --accent:#b8642a; --accent-ink:#ffffff; --accent-soft:#f5e6da;
+  --good:#2f7d4f; --good-soft:#e1f1e7; --warn:#a86a00; --warn-soft:#fbefd6; --bad:#b33a3a; --bad-soft:#f8e1e1; --bad-ink:#ffffff;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14181c; --panel:#1d2228; --ink:#e7ebef; --muted:#97a2ad; --line:#2f363e;
+  --accent:#e08a4c; --accent-ink:#1a1006; --accent-soft:#3a2818;
+  --good:#5cc187; --good-soft:#1b3326; --warn:#e5b04a; --warn-soft:#3a2f14; --bad:#ef7676; --bad-soft:#3d1f1f; --bad-ink:#1a0808; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14181c; --panel:#1d2228; --ink:#e7ebef; --muted:#97a2ad; --line:#2f363e;
+  --accent:#e08a4c; --accent-ink:#1a1006; --accent-soft:#3a2818;
+  --good:#5cc187; --good-soft:#1b3326; --warn:#e5b04a; --warn-soft:#3a2f14; --bad:#ef7676; --bad-soft:#3d1f1f; --bad-ink:#1a0808; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.4}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:14px 60px;display:grid;gap:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.7rem;letter-spacing:.01em;margin:0}
+h1 span{color:var(--accent)}
+.idle{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.idle input{width:4.2em;text-align:center}
+
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.tabs button{font-family:var(--f-display);font-weight:600;font-size:.98rem;letter-spacing:.02em;text-transform:uppercase;border:0;border-radius:8px;padding:9px 2px;background:transparent;color:var(--muted);cursor:pointer;min-width:0}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+
+.per{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--muted);font-family:var(--f-display);font-weight:600;font-size:.95rem;padding:5px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+.panel{display:grid;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:12px}
+.lbl{font-family:var(--f-display);font-weight:600;font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.field{display:grid;gap:4px;min-width:0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.hint{font-size:.8rem;color:var(--muted)}
+p.hint{margin:0}
+input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0;font-variant-numeric:tabular-nums}
+select{height:42px;padding-block:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.big input{font-family:var(--f-display);font-size:1.6rem;font-weight:600;padding:6px 10px}
+
+.ledger{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.ledger th{font-family:var(--f-display);font-weight:600;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line)}
+.ledger th:first-child,.ledger td:first-child{text-align:left;padding-left:0}
+.ledger td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);font-family:var(--f-display);font-size:1.08rem;font-weight:600;white-space:nowrap}
+.ledger tr:last-child td{border-bottom:0}
+.ledger td:first-child{font-family:var(--f-body);font-size:.93rem;font-weight:500;white-space:normal}
+.ledger .out td{color:var(--accent)}
+.ledger .money td:not(:first-child){color:var(--good)}
+.ledger .left td:not(:first-child){color:var(--good)}
+.ledger .dim td{color:var(--muted)}
+.ledger tr.sec td{font-family:var(--f-display);font-size:.8rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:16px;text-align:left;white-space:normal}
+.ledger tr.sec:first-child td{padding-top:4px}
+.scroll{overflow-x:auto}
+
+.rates{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.rate{background:var(--bg);border-radius:10px;padding:10px 12px;display:grid;gap:2px;min-width:0;cursor:pointer;border:1px solid transparent;text-align:left;color:var(--ink);font:inherit}
+.rate .v{font-family:var(--f-display);font-weight:700;font-size:1.55rem;line-height:1.1;overflow-wrap:anywhere}
+.rate .full{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.rate.hl{background:var(--accent-soft)}
+.rate.hl .v{color:var(--accent)}
+
+/* resource + ingredient rows */
+.rows{display:grid;gap:8px}
+.line{display:grid;grid-template-columns:22px minmax(0,1fr) 6.4em auto;gap:6px;align-items:center}
+.icowrap.pick{position:relative;border-radius:6px;box-shadow:0 0 0 1px var(--line);background:var(--bg);width:26px;height:26px;margin-left:-2px}
+.icowrap.pick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;padding:0;border:0;cursor:pointer}
+.icowrap{display:flex;align-items:center;justify-content:center;width:22px;height:22px}
+.ico{width:22px;height:22px;display:block}
+.ledger .ico,.bal-name .ico{width:16px;height:16px;display:inline-block;vertical-align:-3px;margin-right:5px}
+.line.head{font-family:var(--f-display);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ihint{grid-column:1/-1;font-size:.8rem;color:var(--muted);margin-top:-2px;margin-bottom:4px}
+.ihint.warn{color:var(--warn)}
+.del{height:40px;min-width:40px;margin-left:6px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;cursor:pointer;font-size:.95rem;font-family:var(--f-display);font-weight:600;letter-spacing:.03em;touch-action:manipulation;white-space:nowrap}
+.del.arm{background:var(--bad);border-color:var(--bad);color:var(--bad-ink);padding:0 10px;text-transform:uppercase}
+.btn{font-family:var(--f-display);font-weight:600;letter-spacing:.04em;text-transform:uppercase;border:1px dashed var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:10px;cursor:pointer;font-size:.95rem}
+.btn.solid{border:0;background:var(--accent);color:var(--accent-ink)}
+.btn.plain{border-style:solid}
+.btn.sm{padding:8px 12px;font-size:.9rem;white-space:nowrap}
+.level{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.lvedit .grp{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between}
+.lvedit .del{margin-left:0;padding:0 12px}
+
+/* recipes */
+.rec{padding:0;gap:0;overflow:hidden}
+.sum{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;width:100%;border:0;background:transparent;color:var(--ink);text-align:left;padding:12px 14px;cursor:pointer;font:inherit}
+.top{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:stretch}
+.rec.open .top{background:var(--accent-soft)}
+.rec.paused .sum{opacity:.55}
+.tog{display:flex;align-items:center;padding-left:12px;cursor:pointer;position:relative}
+.tog input{position:absolute;opacity:0;width:44px;height:100%;left:4px;top:0;margin:0;cursor:pointer}
+.tog span{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;transition:background .15s;flex:none}
+.tog span::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
+.tog input:checked+span{background:var(--good)}
+.tog input:checked+span::after{transform:translateX(16px)}
+.tog input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.tog span,.tog span::after{transition:none}}
+.s-name .ico{width:18px;height:18px;display:inline-block;vertical-align:-3px;margin-right:6px}
+.s-name{font-family:var(--f-display);font-weight:600;font-size:1.18rem;line-height:1.15;overflow-wrap:anywhere}
+.s-meta{display:block;font-size:.8rem;color:var(--muted);font-family:var(--f-body);font-weight:400}
+.s-rate{font-family:var(--f-display);font-weight:600;font-size:1.1rem;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.s-rate small{display:block;font-size:.75rem;color:var(--muted);font-weight:500}
+.pill{font-family:var(--f-display);font-weight:600;font-size:.82rem;letter-spacing:.04em;padding:3px 8px;border-radius:999px;white-space:nowrap;min-width:3.6em;text-align:center}
+.pill.ok{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.off{background:var(--bg);color:var(--muted)}
+.editor{border-top:1px solid var(--line);padding:14px;display:grid;gap:12px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px}
+.acts .grp{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:.92rem;cursor:pointer}
+.switch input{width:20px;height:20px;accent-color:var(--accent)}
+.empty{padding:16px;text-align:center;color:var(--muted);font-size:.92rem;border:1px dashed var(--line);border-radius:12px}
+details.card summary{cursor:pointer;color:var(--muted);font-size:.92rem;list-style-position:inside}
+.verdict{border-radius:10px;padding:10px 12px;font-size:.92rem;background:var(--bg)}
+.verdict.ok{color:var(--good)} .verdict.short{color:var(--bad)}
+.total{font-size:.92rem}
+.total b{font-family:var(--f-display);font-size:1.15rem;color:var(--good)}
+
+#sfx{position:absolute;z-index:10;display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#sfx button{min-width:42px;height:38px;border:0;border-radius:7px;background:var(--bg);color:var(--ink);font-family:var(--f-display);font-weight:700;font-size:1.05rem;cursor:pointer;touch-action:manipulation}
+#sfx button.close{background:transparent;color:var(--muted);min-width:36px;font-size:.95rem;border-left:1px solid var(--line);border-radius:0 7px 7px 0}
+#sfx button:active{background:var(--accent);color:var(--accent-ink)}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 8px 8px 14px;border-radius:999px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);z-index:20}
+.toast.on{opacity:1;pointer-events:auto}
+.toast button{border:0;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:5px 12px;font-family:var(--f-display);font-weight:700;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+textarea{font:16px/1.35 ui-monospace,Menlo,monospace;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0;height:7.5em;resize:vertical;word-break:break-all}
+textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.bk-msg{border-radius:10px;padding:10px 12px;font-size:.92rem;background:var(--bg)}
+.bk-msg.ok{color:var(--good)} .bk-msg.bad{color:var(--bad);background:var(--bad-soft)}
+.bk-confirm{border:1px solid var(--bad);background:var(--bad-soft);border-radius:10px;padding:12px;display:grid;gap:10px;font-size:.92rem}
+.bk-confirm .grp{display:flex;gap:8px;flex-wrap:wrap}
+.btn.danger{border:0;background:var(--bad);color:var(--bad-ink)}
+@media (max-width:400px){.line{grid-template-columns:22px minmax(0,1fr) 5.6em auto}.tabs button{font-size:.88rem}}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Idle <span>Forge</span> Calc</h1>
+    <label class="idle" for="idleH">Max idle <input id="idleH" type="number" inputmode="decimal" min="0" step="0.25" value="4"> h</label>
+  </header>
+
+  <div class="level" id="lvRow">
+    <label class="lbl" for="lvSel">Level</label>
+    <select id="lvSel" aria-label="Current level"></select>
+    <button type="button" class="btn plain sm" id="lvEditBtn" aria-expanded="false">Edit</button>
+    <button type="button" class="btn solid sm" id="lvNew">+ New</button>
+  </div>
+  <div class="card lvedit" id="lvEdit" hidden>
+    <div class="field"><label class="lbl" for="lvName">Level name</label><input id="lvName" type="text" placeholder="e.g. Breaking Green" autocomplete="off"></div>
+    <div class="grp">
+      <button type="button" class="btn plain sm" id="lvDup">Duplicate level</button>
+      <button type="button" class="del" data-del="lv">Delete level</button>
+    </div>
+    <p class="hint">Each level has its own income and recipes, and everything saves automatically. Switching levels keeps the others as they are. Bonuses are shared by all levels.</p>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="rate">Rate</button>
+    <button role="tab" data-tab="res">Income</button>
+    <button role="tab" data-tab="smelter">Smelters</button>
+    <button role="tab" data-tab="crafter">Crafters</button>
+  </div>
+
+  <div class="per" id="perRow">
+    <span class="lbl">Show per</span>
+    <div class="seg" id="perSeg">
+      <button type="button" data-view="s">sec</button>
+      <button type="button" data-view="min">min</button>
+      <button type="button" data-view="h">hour</button>
+      <button type="button" data-view="idle" id="perIdle">idle</button>
+    </div>
+  </div>
+
+  <!-- RATE -->
+  <section id="p-rate" class="card" hidden>
+    <div class="row">
+      <div class="field big"><label class="lbl" for="rAmt">Amount</label><input id="rAmt" class="qty" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" value="182"></div>
+      <div class="field"><label class="lbl" for="rUnit">Per</label>
+        <select id="rUnit" style="height:100%"><option value="1">second</option><option value="60">minute</option><option value="3600">hour</option><option value="idle">max idle</option></select></div>
+    </div>
+    <div class="rates" id="rOut"></div>
+    <div class="hint">Type 12.5k or 2M, or use the k / M / B / T buttons. Tap a result to copy it.</div>
+  </section>
+
+  <!-- RESOURCES -->
+  <section id="p-res" class="panel" hidden>
+    <div class="card">
+      <div class="lbl">Your income</div>
+      <div class="rows" id="resList"></div>
+      <button class="btn" type="button" data-add-res>+ Resource</button>
+      <p class="hint">Tap an icon to change its colour. Income per second, as the game shows it. Smelter and crafter recipes take their ingredients from this list, so you only update numbers here.</p>
+    </div>
+    <div class="card">
+      <div class="lbl">Balance, all running recipes</div>
+      <div class="scroll"><table class="ledger" id="balance"></table></div>
+      <div id="balTotal" class="total" hidden></div>
+    </div>
+    <div class="card" id="bkExport">
+      <div class="lbl">Export (backup)</div>
+      <textarea id="expText" readonly aria-label="All saved data as JSON" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+      <button type="button" class="btn solid" id="expCopy">Copy</button>
+      <p class="hint">All levels, recipes, bonuses and settings. Copy it and keep it in Notes or a message to yourself.</p>
+    </div>
+    <div class="card" id="bkImport">
+      <div class="lbl">Import</div>
+      <textarea id="impText" aria-label="Paste exported JSON here" placeholder="Paste exported data here" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></textarea>
+      <button type="button" class="btn plain" id="impBtn">Import</button>
+      <div class="bk-confirm" id="impConfirm" hidden>
+        <span id="impSummary"></span>
+        <div class="grp">
+          <button type="button" class="btn danger sm" id="impYes">Replace my data</button>
+          <button type="button" class="btn plain sm" id="impNo">Cancel</button>
+        </div>
+      </div>
+      <div class="bk-msg" id="impMsg" role="status" hidden></div>
+    </div>
+  </section>
+
+  <!-- SMELTERS / CRAFTERS -->
+  <section id="p-smelter" class="panel" hidden></section>
+  <section id="p-crafter" class="panel" hidden></section>
+</div>
+<div class="toast" id="toast" role="status"><span id="toastText"></span><button type="button" id="toastBtn" hidden>Undo</button></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+
+/* ---------- storage: Scriptable file (window.__WIC) or browser storage ---------- */
+const NATIVE=typeof window.__WIC==='object'&&window.__WIC!==null;
+const mem=NATIVE?window.__WIC:{};
+let saveT;
+function nativeSave(){clearTimeout(saveT);saveT=setTimeout(()=>{try{location.href='wic://save?'+encodeURIComponent(JSON.stringify(mem))}catch(e){}},300)}
+const store={
+  get(k,d){if(NATIVE)return (k in mem)?mem[k]:d;try{const v=localStorage.getItem('wic_'+k);return v?JSON.parse(v):d}catch(e){return d}},
+  set(k,v){if(NATIVE){mem[k]=v;nativeSave();return}try{localStorage.setItem('wic_'+k,JSON.stringify(v))}catch(e){}}
+};
+
+/* ---------- numbers ---------- */
+const MULT={k:1e3,m:1e6,b:1e9,t:1e12,q:1e15};
+function parseQty(s){
+  s=String(s??'').trim().replace(/\s+/g,'').replace(',','.');
+  const m=s.match(/^(-?\d*\.?\d+)([kmbtq]?)$/i);
+  if(!m)return NaN;
+  return parseFloat(m[1])*(m[2]?MULT[m[2].toLowerCase()]:1);
+}
+const num=el=>{const v=parseQty(el.value);return isFinite(v)?v:0};
+function short(n){
+  if(!isFinite(n))return '–';
+  const a=Math.abs(n), units=[[1e15,'Q'],[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'K']];
+  for(const [v,s] of units) if(a>=v) return trim(n/v)+s;
+  return trim(n);
+}
+function trim(x){const a=Math.abs(x);const d=a>=100?0:a>=10?1:a>=1?2:a>=0.01?3:4;return (+x.toFixed(d)).toLocaleString('en-US',{maximumFractionDigits:d})}
+function full(n){return isFinite(n)?(+n.toFixed(Math.abs(n)<1?4:2)).toLocaleString('en-US'):'–'}
+function dur(s){if(!isFinite(s))return '–';if(s<60)return trim(s)+' s';const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=Math.round(s%60);return (h?h+'h ':'')+(m||h?m+'m':'')+(r?' '+r+'s':'')}
+const idleS=()=>Math.max(0,num($('#idleH')))*3600;
+function idleShort(){const h=num($('#idleH'));const hh=Math.floor(h),mm=Math.round((h-hh)*60);return (hh?hh+'h':'')+(mm?mm+'m':'')+(!hh&&!mm?'0h':'')}
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+
+let tm;
+function toast(t,undo){
+  const el=$('#toast');$('#toastText').textContent=t;
+  const b=$('#toastBtn');b.hidden=!undo;b.onclick=undo?()=>{undo();el.classList.remove('on')}:null;
+  el.classList.add('on');clearTimeout(tm);tm=setTimeout(()=>el.classList.remove('on'),undo?5000:1400);
+}
+function copy(text){try{navigator.clipboard.writeText(text).then(()=>toast('Copied '+text),()=>toast(text))}catch(e){toast(text)}}
+
+/* ---------- state ---------- */
+const uid=()=>Math.random().toString(36).slice(2,9);
+/* The game's ores, in its order, with the colour of their icon */
+const ORES=[['Copper','#f2a21b'],['Tin','#f3a3df'],['Iron','#5cc4cf'],['Zinc','#b49a48'],['Nickel','#2443e6'],['Lead','#cf4747'],['Silicon','#36d94a'],['Aluminum','#cfc8b4'],['Silver','#eeeeee'],['Gold','#f4dc12']];
+const oreKey=n=>String(n||'').trim().toLowerCase().replace(/\s+ore$/,'');
+/* a colour you picked wins; otherwise the game colour for known ores */
+const oreColor=n=>{const k=oreKey(n);if(!k)return null;
+  const mine=(typeof S!=='undefined'&&S&&S.resources||[]).find(x=>oreKey(x.name)===k&&x.color);if(mine)return mine.color;
+  const o=ORES.find(o=>o[0].toLowerCase()===k);return o?o[1]:null};
+const toHex=c=>/^#[0-9a-f]{6}$/i.test(c||'')?c:'#8a939c';
+/* made items: a bar in the colour of the ore their name starts with (e.g. "Copper bar") */
+function itemIcon(name){
+  const first=String(name||'').trim().split(/\s+/)[0];const c=oreColor(first)||'var(--accent)';
+  return `<svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 13.5 5.5 6.5h9l3 7z" fill="${c}" stroke="#000" stroke-opacity=".45" stroke-width="1"/><path d="M5.5 6.5 7 9.5h6l1.5-3M7 9.5l-2 4M13 9.5l2 4" fill="none" stroke="#000" stroke-opacity=".25" stroke-width=".9"/><path d="M7.2 7.6h5.4" stroke="#fff" stroke-opacity=".55" stroke-width="1.1"/></svg>`;
+}
+function icoFor(src){
+  if(!src)return '';
+  if(src[0]==='r'){const x=S.resources.find(y=>y.id===src.slice(2));return x?oreIcon(x.name,x.color):''}
+  const r=S.recipes.find(y=>y.id===src.slice(2));return r?itemIcon(r.name):'';
+}
+function oreIcon(name,own){
+  const c=own||oreColor(name);
+  const f=c||'var(--muted)';
+  return `<svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7.5 8.5 3 15 4.5 17.5 10 14 16.5 7 17 2.5 12z" fill="${f}" stroke="#000" stroke-opacity=".45" stroke-width="1"/><path d="M8.5 3 9.5 9 4 7.5M9.5 9 15 4.5M9.5 9 14 16.5M9.5 9 2.5 12" fill="none" stroke="#000" stroke-opacity=".28" stroke-width=".9"/><path d="M5.5 7.2 8.6 4.2 9.2 8.2z" fill="#fff" fill-opacity=".45"/></svg>`;
+}
+/* Make sure all game ores are in the list, in game order, with your own extra resources after them */
+function ensureOres(st){
+  ORES.forEach(([n])=>{if(!st.resources.some(x=>oreKey(x.name)===n.toLowerCase()))st.resources.push({id:uid(),name:n,inc:''})});
+  const idx=x=>{const i=ORES.findIndex(o=>o[0].toLowerCase()===oreKey(x.name));return i<0?99:i};
+  st.resources.sort((a,b)=>idx(a)-idx(b));
+}
+function example(){
+  const cu={id:uid(),name:'Copper',inc:'150'}, tin={id:uid(),name:'Tin',inc:'120'};
+  const tb={id:uid(),kind:'smelter',name:'Tin bar',time:'9',count:'7',price:'',on:true,ings:[{src:'r:'+tin.id,qty:'234'}]};
+  const cb={id:uid(),kind:'smelter',name:'Copper bar',time:'6',count:'2',price:'',on:true,ings:[{src:'r:'+cu.id,qty:'120'}]};
+  const cw={id:uid(),kind:'crafter',name:'Copper wire',time:'49',count:'4',price:'',on:true,ings:[{src:'p:'+cb.id,qty:'3'}]};
+  return {resources:[cu,tin],recipes:[tb,cb,cw],bonus:{smelter:{speed:'0',eff:'0'},crafter:{speed:'0',eff:'0'}},view:'h',tab:'smelter',open:null,example:true};
+}
+/* Bring v1 saved recipes over: ingredient names become resources, and a recipe that uses another recipe's product becomes a crafter. */
+function migrate(){
+  const saved=store.get('saved',[])||[], cur=store.get('craft',null);
+  let list=saved.slice(); if(!list.length&&cur&&cur.ings&&cur.ings.some(g=>g.name||g.qty)) list=[cur];
+  if(!list.length) return example();
+  const res=[], byName={}, prod={};
+  const recs=list.map(c=>({id:uid(),kind:'smelter',name:c.name||'Recipe',time:String(c.time||''),count:String(c.count||'1'),price:c.price||'',on:true,_i:c.ings||[]}));
+  recs.forEach(r=>{prod[r.name.trim().toLowerCase()]=r});
+  recs.forEach(r=>{
+    r.ings=r._i.filter(g=>g&&(g.name||g.qty)).map(g=>{
+      const p=prod[String(g.name||'').trim().toLowerCase()], key=oreKey(g.name);
+      if(p&&p!==r){r.kind='crafter';return {src:'p:'+p.id,qty:g.qty||''}}
+      let R=byName[key];if(!R){const std=ORES.find(o=>o[0].toLowerCase()===key);R={id:uid(),name:std?std[0]:(g.name||'Resource'),inc:''};byName[key]=R;res.push(R)}
+      if(!R.inc&&g.inc)R.inc=String(g.inc);
+      return {src:'r:'+R.id,qty:g.qty||''};
+    });delete r._i;
+  });
+  const sp=(list.find(c=>parseFloat(c.speed))||{}).speed||'0', ef=(list.find(c=>parseFloat(c.eff))||{}).eff||'0';
+  return {resources:res,recipes:recs,bonus:{smelter:{speed:sp,eff:ef},crafter:{speed:'0',eff:'0'}},view:'h',tab:'smelter',open:null,migrated:true};
+}
+let S=store.get('v2',null);
+if(!S||!Array.isArray(S.recipes)) S=migrate();
+/* fill in missing parts of S (also used after an import) */
+function prepState(){
+S.bonus=S.bonus||{};S.bonus.smelter=S.bonus.smelter||{speed:'0',eff:'0'};S.bonus.crafter=S.bonus.crafter||{speed:'0',eff:'0'};
+
+/* ---------- levels ----------
+   Each level keeps its own income list and recipes. Bonuses, sorting and display settings are shared,
+   since advancements and artifacts carry over between levels. S.resources / S.recipes always point at
+   the current level's lists. */
+if(!Array.isArray(S.levels)||!S.levels.length){S.levels=[{id:uid(),name:'Level 1',resources:S.resources,recipes:S.recipes}];S.cur=S.levels[0].id}
+}
+prepState();
+function curLevel(){return S.levels.find(l=>l.id===S.cur)||S.levels[0]}
+function bindLevel(){const lv=curLevel();S.cur=lv.id;ensureOres(lv);S.resources=lv.resources;S.recipes=lv.recipes}
+function syncLevel(){const lv=curLevel();lv.resources=S.resources;lv.recipes=S.recipes}
+bindLevel();
+let saveT2;function save(){clearTimeout(saveT2);saveT2=setTimeout(()=>{syncLevel();store.set('v2',S)},200)}
+function switchLevel(id){syncLevel();S.cur=id;S.open=null;bindLevel();renderLevels();rerender()}
+function newLevel(){
+  syncLevel();
+  // keep your own extra resources and colours, but with no income; all recipes start empty
+  const res=ORES.map(([n])=>({id:uid(),name:n,inc:''}));
+  S.resources.forEach(x=>{const std=ORES.some(o=>o[0].toLowerCase()===oreKey(x.name));
+    if(std){if(x.color)res.find(y=>oreKey(y.name)===oreKey(x.name)).color=x.color}else res.push({id:uid(),name:x.name,inc:'',color:x.color})});
+  const lv={id:uid(),name:'Level '+(S.levels.length+1),resources:res,recipes:[]};
+  S.levels.push(lv);switchLevel(lv.id);
+  $('#lvEdit').hidden=false;const n=$('#lvName');n.focus();n.select();
+  toast(`${lv.name} created`);
+}
+function dupLevel(){
+  syncLevel();const src=curLevel();
+  const lv=JSON.parse(JSON.stringify(src));lv.id=uid();lv.name=src.name+' (copy)';
+  S.levels.push(lv);switchLevel(lv.id);toast('Level copied');
+}
+function renderLevels(){
+  const sel=$('#lvSel');
+  sel.innerHTML=S.levels.map(l=>`<option value="${l.id}">${esc(l.name||'Unnamed level')}</option>`).join('');
+  sel.value=S.cur;
+  const n=$('#lvName');if(document.activeElement!==n)n.value=curLevel().name||'';
+}
+
+const recById=id=>S.recipes.find(r=>r.id===id);
+const resById=id=>S.resources.find(r=>r.id===id);
+function srcName(src){if(!src)return '?';const o=src[0]==='r'?resById(src.slice(2)):recById(src.slice(2));return o?(o.name||'Unnamed'):'removed item'}
+const KIND={smelter:'smelter',crafter:'crafter'};
+
+/* ---------- the model ----------
+   Recipes are solved in dependency order: smelters that only use resources first, then whatever
+   uses their bars, and so on. Inside one step, recipes that share an input split it fairly: all run
+   at the same busy % until an input runs out, then the ones using it stop rising and the rest go on. */
+function params(r){
+  const b=S.bonus[r.kind]||{};
+  const t=(parseQty(r.time)||0)/(1+(parseQty(b.speed)||0)/100);
+  const n=parseQty(r.count)||0;
+  const eff=Math.max(0,1-(parseQty(b.eff)||0)/100);
+  const Rmax=t>0?n/t:0;
+  const ins={};
+  r.ings.forEach(g=>{const q=parseQty(g.qty);if(!g.src||!(q>0))return;
+    const ok=g.src[0]==='r'?!!resById(g.src.slice(2)):(!!recById(g.src.slice(2))&&g.src.slice(2)!==r.id);
+    if(ok)ins[g.src]=(ins[g.src]||0)+q*eff});
+  return {t,n,Rmax,ins};
+}
+function fill(recs,P,avail,frac,limit){
+  const frozen=new Set();let theta=0;
+  recs.forEach(r=>{if(!(P[r.id].Rmax>0)){frac[r.id]=0;frozen.add(r.id)}});
+  for(let guard=0;guard<500;guard++){
+    const open=recs.filter(r=>!frozen.has(r.id));if(!open.length)break;
+    let best=1,bestX=null;const keys=new Set();open.forEach(r=>Object.keys(P[r.id].ins).forEach(k=>keys.add(k)));
+    keys.forEach(X=>{
+      const Sx=avail[X];if(Sx===Infinity)return;
+      let fixed=0,slope=0;
+      recs.forEach(r=>{const q=P[r.id].ins[X];if(!q)return;if(frozen.has(r.id))fixed+=frac[r.id]*P[r.id].Rmax*q;else slope+=P[r.id].Rmax*q});
+      if(slope<=0)return;
+      const th=Math.max(0,(Sx-fixed)/slope);
+      if(th<best){best=th;bestX=X}
+    });
+    theta=Math.max(theta,Math.min(best,1));
+    if(bestX===null||best>=1){open.forEach(r=>frac[r.id]=1);break}
+    open.forEach(r=>{if(P[r.id].ins[bestX]){frac[r.id]=theta;frozen.add(r.id);limit[r.id]=bestX}});
+  }
+}
+function compute(){
+  const P={};S.recipes.forEach(r=>P[r.id]=params(r));
+  const run=S.recipes.filter(r=>r.on!==false);
+  // dependency level (resources = 0)
+  const lvl={},state={};let cycle=false;
+  function level(r){
+    if(lvl[r.id]!=null)return lvl[r.id];
+    if(state[r.id]==='v'){cycle=true;return 0}
+    state[r.id]='v';let L=1;
+    Object.keys(P[r.id].ins).forEach(X=>{if(X[0]==='p'){const p=recById(X.slice(2));if(p&&p.on!==false)L=Math.max(L,level(p)+1)}});
+    state[r.id]='d';return lvl[r.id]=L;
+  }
+  run.forEach(level);
+  const supply={},avail={};
+  S.resources.forEach(x=>{const v=parseQty(x.inc);supply['r:'+x.id]=avail['r:'+x.id]=isFinite(v)?v:Infinity});
+  S.recipes.forEach(r=>{supply['p:'+r.id]=avail['p:'+r.id]=0});
+  const frac={},limit={},used={};
+  const levels=[...new Set(run.map(r=>lvl[r.id]))].sort((a,b)=>a-b);
+  levels.forEach(L=>{
+    const group=run.filter(r=>lvl[r.id]===L);
+    fill(group,P,avail,frac,limit);
+    group.forEach(r=>{
+      Object.entries(P[r.id].ins).forEach(([X,q])=>{const u=frac[r.id]*P[r.id].Rmax*q;used[X]=(used[X]||0)+u;if(avail[X]!==Infinity)avail[X]=Math.max(0,avail[X]-u)});
+      const out=frac[r.id]*P[r.id].Rmax;supply['p:'+r.id]=out;avail['p:'+r.id]+=out;
+    });
+  });
+  const rate={};run.forEach(r=>rate[r.id]=frac[r.id]*P[r.id].Rmax);
+  const users={};run.forEach(r=>Object.keys(P[r.id].ins).forEach(X=>{(users[X]=users[X]||[]).push(r.id)}));
+  return {P,rate,frac,limit,used,supply,users,cycle};
+}
+
+/* ---------- view helpers ---------- */
+function unit(){const v=S.view||'h';return v==='s'?[1,'/s']:v==='min'?[60,'/min']:v==='idle'?[idleS(),'/idle']:[3600,'/h']}
+function pill(r,C){
+  if(r.on===false)return '<span class="pill off">Paused</span>';
+  const P=C.P[r.id];if(!(P.Rmax>0))return '<span class="pill off">–</span>';
+  const f=C.frac[r.id]??1, pct=Math.round(f*100);
+  return `<span class="pill ${f>=0.995?'ok':f>=0.5?'warn':'bad'}">${f>=0.995?'100':Math.min(pct,99)}%</span>`;
+}
+function srcOptions(r){
+  const smel=S.recipes.filter(x=>x.kind==='smelter'&&x.id!==r.id), craf=S.recipes.filter(x=>x.kind==='crafter'&&x.id!==r.id);
+  const grp=(label,items,pre)=>items.length?`<optgroup label="${label}">`+items.map(x=>`<option value="${pre}${x.id}">${esc(x.name||'Unnamed')}${x.on===false?' (paused)':''}</option>`).join('')+'</optgroup>':'';
+  const res=grp('Resources',S.resources,'r:'), sm=grp('Smelters',smel,'p:'), cr=grp('Crafters',craf,'p:');
+  return '<option value="">Choose…</option>'+(r.kind==='smelter'?res+sm+cr:sm+cr+res);
+}
+
+/* ---------- render: resources ---------- */
+function renderResources(){
+  $('#resList').innerHTML=(S.resources.length?'<div class="line head"><span></span><span>Resource</span><span>Per sec</span><span></span></div>':'')+
+    (S.resources.map(x=>`<div class="line" data-res="${x.id}">
+      <span class="icowrap pick"><span data-ico="r:${x.id}">${oreIcon(x.name,x.color)}</span><input type="color" id="rc-${x.id}" aria-label="Colour for ${esc(x.name)}" value="${toHex(x.color||oreColor(x.name))}" data-rf="color"></span>
+      <input aria-label="Resource name" id="rn-${x.id}" type="text" value="${esc(x.name)}" placeholder="Copper ore" data-rf="name">
+      <input aria-label="Income per second" id="ri-${x.id}" class="qty" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" value="${esc(x.inc)}" placeholder="0" data-rf="inc">
+      <button type="button" class="del" data-del="res" data-id="${x.id}" aria-label="Remove ${esc(x.name)}">✕</button>
+      <div class="ihint" data-rh="${x.id}"></div></div>`).join('')||'<div class="empty">No resources yet. Add the ores you mine and their income per second.</div>');
+}
+
+/* ---------- render: recipe lists ---------- */
+function renderList(kind){
+  let list=S.recipes.filter(r=>r.kind===kind);
+  const b=S.bonus[kind];
+  const name=kind==='smelter'?'smelter':'crafter';
+  // sort order (applied when the list is drawn, so rows don't jump around while you type)
+  S.sort=S.sort||{};const so=S.sort[kind]||'added';
+  if(so!=='added'&&list.length>1){
+    const C=compute();
+    // paused recipes keep their place: they are ranked by what they would do if switched on
+    const what={};
+    list.forEach(r=>{
+      if(r.on!==false){what[r.id]={rate:C.rate[r.id]||0,frac:C.frac[r.id]??1};return}
+      r.on=true;const H=compute();r.on=false;
+      what[r.id]={rate:H.rate[r.id]||0,frac:H.frac[r.id]??1};
+    });
+    const money=r=>{const p=parseQty(r.price);return p>0?what[r.id].rate*p:-1};
+    const busy=r=>C.P[r.id].Rmax>0?what[r.id].frac:-1;
+    const key=so==='money'?money:busy;
+    list=list.map((r,i)=>({r,i})).sort((a,b)=>(key(b.r)-key(a.r))||(so==='busy'?money(b.r)-money(a.r):0)||a.i-b.i).map(o=>o.r);
+  }
+  let html='';
+  if(list.length>1)html+=`<div class="per"><span class="lbl">Sort by</span><div class="seg">
+    <button type="button" data-sort="${kind}:added" aria-pressed="${so==='added'}">added</button>
+    <button type="button" data-sort="${kind}:money" aria-pressed="${so==='money'}">money</button>
+    <button type="button" data-sort="${kind}:busy" aria-pressed="${so==='busy'}">busy %</button></div></div>`;
+  html+=list.length?list.map(r=>recHTML(r)).join(''):`<div class="empty">No ${name} recipes yet.</div>`;
+  html+=`<button class="btn" type="button" data-add="${kind}">+ ${kind==='smelter'?'Smelter':'Crafter'} recipe</button>`;
+  html+=`<details class="card"><summary>Bonuses for all ${name}s</summary>
+    <div class="row">
+      <div class="field"><label class="lbl" for="bs-${kind}">Speed bonus %</label><input id="bs-${kind}" class="qty" type="text" inputmode="decimal" value="${esc(b.speed)}" data-bonus="${kind}.speed"></div>
+      <div class="field"><label class="lbl" for="be-${kind}">Ingredients −%</label><input id="be-${kind}" class="qty" type="text" inputmode="decimal" value="${esc(b.eff)}" data-bonus="${kind}.eff"></div>
+    </div>
+    <p class="hint">Leave at 0 if the times and amounts you typed already include your bonuses. Speed bonus divides the time by (1 + %). Ingredients −% is the Efficient ${kind==='smelter'?'Smelters':'Crafters'} artifact.</p></details>`;
+  $('#p-'+kind).innerHTML=html;
+}
+function recHTML(r){
+  const open=S.open===r.id;
+  const ts=parseFloat(r.time)||0;
+  let ed='';
+  if(open){
+    const other=r.kind==='smelter'?'crafters':'smelters';
+    ed=`<div class="editor">
+      <div class="field"><label class="lbl" for="n-${r.id}">Produces</label><input id="n-${r.id}" type="text" value="${esc(r.name)}" placeholder="${r.kind==='smelter'?'Copper bar':'Copper wire'}" data-f="name"></div>
+      <div><div class="lbl" style="margin-bottom:4px">Time per item</div>
+      <div class="row3">
+        <div class="field"><label class="hint" for="tm-${r.id}">min</label><input id="tm-${r.id}" type="number" inputmode="decimal" min="0" value="${Math.floor(ts/60)}" data-f="min"></div>
+        <div class="field"><label class="hint" for="ts-${r.id}">sec</label><input id="ts-${r.id}" type="number" inputmode="decimal" min="0" value="${+(ts%60).toFixed(2)}" data-f="sec"></div>
+        <div class="field"><label class="hint" for="c-${r.id}">machines</label><input id="c-${r.id}" type="number" inputmode="numeric" min="0" value="${esc(r.count)}" data-f="count"></div>
+      </div></div>
+      <div class="field"><label class="lbl" for="pr-${r.id}">Sell value per item</label><input id="pr-${r.id}" class="qty" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Optional, e.g. 5k" value="${esc(r.price)}" data-f="price"></div>
+      <div class="rows">
+        <div class="line head"><span></span><span>Needs</span><span>Per item</span><span></span></div>
+        ${r.ings.map((g,i)=>`<div class="line" data-ing="${i}">
+          <span class="icowrap" data-ico="${esc(g.src)}"></span>
+          <select aria-label="Ingredient" id="is-${r.id}-${i}" data-f="src">${srcOptions(r)}</select>
+          <input aria-label="Amount per item" id="iq-${r.id}-${i}" class="qty" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="234" value="${esc(g.qty)}" data-f="qty">
+          <button type="button" class="del" data-del="ing" data-id="${r.id}" data-i="${i}" aria-label="Remove ingredient">✕</button>
+          <div class="ihint" data-ih="${i}"></div></div>`).join('')}
+        <button class="btn" type="button" data-add-ing="${r.id}">+ Ingredient</button>
+      </div>
+      <div class="scroll"><table class="ledger" data-ledger></table></div>
+      <div class="verdict" data-verdict hidden></div>
+      <div class="acts">
+        <label class="switch"><input type="checkbox" id="on-${r.id}" data-f="on" ${r.on!==false?'checked':''}> Running</label>
+        <div class="grp">
+          <button type="button" class="btn plain" data-move="${r.id}">Move to ${other}</button>
+          <button type="button" class="del" data-del="rec" data-id="${r.id}">Delete</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  return `<div class="rec card${open?' open':''}${r.on===false?' paused':''}" data-rid="${r.id}">
+    <div class="top">
+      <label class="tog" title="Running"><input type="checkbox" id="qo-${r.id}" data-quick-on="${r.id}" aria-label="Running: ${esc(r.name)}" ${r.on!==false?'checked':''}><span></span></label>
+      <button type="button" class="sum" data-toggle="${r.id}" aria-expanded="${open}"><span><span class="s-name"></span><span class="s-meta"></span></span><span class="s-rate"></span><span data-pill></span></button>
+    </div>${ed}</div>`;
+}
+function setSelects(){
+  $$('.rec.open').forEach(el=>{const r=recById(el.dataset.rid);if(!r)return;
+    el.querySelectorAll('[data-ing]').forEach(row=>{const g=r.ings[+row.dataset.ing];const s=row.querySelector('select');
+      s.value=g.src||'';if(g.src&&s.value!==g.src){s.insertAdjacentHTML('beforeend',`<option value="${esc(g.src)}">(removed)</option>`);s.value=g.src}});
+  });
+}
+
+/* ---------- update numbers everywhere ---------- */
+function update(){
+  const C=compute();const [u,L]=unit();
+  $('#perIdle').textContent='idle '+idleShort();
+  $$('[data-ico]').forEach(el=>{const h=icoFor(el.dataset.ico);if(el.innerHTML!==h)el.innerHTML=h});
+  $$('#perSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===(S.view||'h')));
+  // recipe summaries
+  $$('.rec').forEach(el=>{
+    const r=recById(el.dataset.rid);if(!r)return;const P=C.P[r.id];
+    const rate=r.on!==false?(C.rate[r.id]||0):P.Rmax;
+    el.querySelector('.s-name').innerHTML=itemIcon(r.name)+esc(r.name||'Unnamed');
+    const price=parseQty(r.price);
+    el.querySelector('.s-meta').textContent=`${short(P.n)} × ${P.t>0?dur(P.t):'–'}`+(price>0&&r.on!==false?` · ${short(rate*price*u)}${L}`:'');
+    el.querySelector('.s-rate').innerHTML=`${short(rate*u)}<small>${L}</small>`;
+    el.querySelector('[data-pill]').innerHTML=pill(r,C);
+  });
+  // open editor
+  const ed=$(`#p-${S.tab} .rec.open`);
+  if(ed){const r=recById(ed.dataset.rid);if(r)renderResult(r,C,ed)}
+  // resources hints + balance
+  $$('[data-rh]').forEach(h=>{const X='r:'+h.dataset.rh, n=(C.users[X]||[]).length;
+    const sup=C.supply[X];h.className='ihint';
+    h.hidden=!n&&sup===Infinity;
+    h.textContent=n?`Used by ${n} recipe${n>1?'s':''}: ${short((C.used[X]||0)*u)}${L} of ${sup===Infinity?'(no income set)':short(sup*u)+L}`:'Not used by any running recipe.'});
+  renderBalance(C,u,L);
+  if(!$('#p-res').hidden)renderExport();
+  if(C.cycle)toast('Two recipes feed each other. Check their ingredients.');
+  save();
+}
+function renderResult(r,C,ed){
+  const P=C.P[r.id];const [u,L]=unit();const I=idleS();
+  const run=r.on!==false, f=run?(C.frac[r.id]??1):1, rate=P.Rmax*f;
+  const price=parseQty(r.price);
+  // ingredient hints
+  ed.querySelectorAll('[data-ih]').forEach(h=>{
+    const g=r.ings[+h.dataset.ih];h.className='ihint';
+    if(!g.src){h.textContent='Pick where this comes from.';h.classList.add('warn');return}
+    const isRes=g.src[0]==='r', o=isRes?resById(g.src.slice(2)):recById(g.src.slice(2));
+    if(!o){h.textContent='That source was removed. Pick another.';h.classList.add('warn');return}
+    const q=P.ins[g.src]||0, use=rate*q, others=(C.users[g.src]||[]).filter(id=>id!==r.id).length;
+    const sh=others?` Shared with ${others} other recipe${others>1?'s':''}.`:'';
+    if(isRes){
+      const v=parseQty(o.inc);
+      if(!isFinite(v)){h.textContent=`No income set for ${o.name||'this resource'}, so it is not counted. Add it in the Income tab.`;h.classList.add('warn');return}
+      h.textContent=`Income ${short(v*u)}${L} · this recipe uses ${short(use*u)}${L}.`+sh;
+    } else {
+      if(o.on===false){h.textContent=`${o.name||'That recipe'} is paused, so none is coming in.`;h.classList.add('warn');return}
+      const op=C.P[o.id], of=C.frac[o.id]??1;
+      h.textContent=`${o.name||'That'} ${o.kind} makes ${short((C.rate[o.id]||0)*u)}${L}`+(of<0.995?` (${short(op.Rmax*u)}${L} at full speed, it runs ${Math.round(of*100)}%)`:'')+` · this recipe uses ${short(use*u)}${L}.`+sh;
+    }
+  });
+  // table
+  const head=`<tr><th></th><th>/ s</th><th>/ min</th><th>/ h</th><th>${idleShort()}</th></tr>`;
+  const line=(label,ps,cls='')=>`<tr class="${cls}"><td>${label}</td><td>${short(ps)}</td><td>${short(ps*60)}</td><td>${short(ps*3600)}</td><td>${short(ps*I)}</td></tr>`;
+  const block=(k,cls)=>{let h=line('<b>'+esc(r.name||'Output')+'</b> made',P.Rmax*k,'out '+cls);
+    if(price>0)h+=line('Value if sold',P.Rmax*k*price,'money '+cls);
+    Object.entries(P.ins).forEach(([X,q])=>{h+=line(icoFor(X)+esc(srcName(X))+' used',P.Rmax*k*q,cls)});return h};
+  let html=head;
+  if(!run) html+=`<tr class="sec"><td colspan="5">Paused · at full speed it would make</td></tr>`+block(1,'');
+  else if(f<0.995&&P.Rmax>0) html+=`<tr class="sec"><td colspan="5">Actual · busy ${Math.round(f*100)}%, waiting for inputs</td></tr>`+block(f,'')+`<tr class="sec"><td colspan="5">At full speed</td></tr>`+block(1,'dim');
+  else html+=block(1,'');
+  ed.querySelector('[data-ledger]').innerHTML=html;
+  // verdict
+  const v=ed.querySelector('[data-verdict]');v.hidden=true;
+  if(run&&!(P.Rmax>0)){v.className='verdict';v.textContent='Enter the time per item and the number of machines to see the numbers.';v.hidden=false;return}
+  if(!run||!Object.keys(P.ins).length)return;
+  const X=C.limit[r.id];
+  if(X&&f<0.005){
+    const p=X[0]==='p'?recById(X.slice(2)):null;
+    v.className='verdict short';
+    v.textContent=p&&p.on===false?`Stopped: your ${p.name} ${p.kind} is paused, so no ${p.name} is coming in. Switch it on to run this recipe.`
+      :`Stopped: no ${srcName(X)} is available for this recipe.`+(X[0]==='r'?' Check its income in the Income tab.':'');
+    v.hidden=false;return;
+  }
+  if(f<0.995&&X){
+    const q=P.ins[X], need=(P.Rmax-rate)*q, k=Math.floor(P.n*f+1e-9), shared=(C.users[X]||[]).length>1;
+    let t=`Limited by ${srcName(X)}. Machines work ${Math.round(f*100)}% of the time, so each one makes an item every ${dur(P.t/Math.max(f,1e-9))} instead of ${dur(P.t)}. `;
+    if(X[0]==='p'){
+      const p=recById(X.slice(2)), pf=C.frac[p.id]??1;
+      if(pf<0.995&&C.limit[p.id]) t+=`Your ${p.name} ${p.kind} is itself short of ${srcName(C.limit[p.id])} (running ${Math.round(pf*100)}%). `;
+      else {const pt=C.P[p.id].t;const m=Math.ceil(need*pt-1e-9);t+=`You need about +${short(need)}/s ${p.name}, roughly ${m} more ${p.kind} machine${m==1?'':'s'}. `}
+    } else t+=`To run nonstop you need about +${short(need)}/s ${srcName(X)}${shared?' (more, since it is shared)':''}. `;
+    t+=`Or run ${k} machine${k==1?'':'s'} instead of ${short(P.n)}.`;
+    v.className='verdict short';v.textContent=t;v.hidden=false;
+  } else {
+    let extra=Infinity;
+    Object.entries(P.ins).forEach(([Y,q])=>{const sup=C.supply[Y];if(sup===Infinity)return;const free=Math.max(0,sup-(C.used[Y]||0));const per=P.t>0?q/P.t:0;if(per>0)extra=Math.min(extra,free/per)});
+    if(extra===Infinity)return;
+    v.className='verdict ok';
+    v.textContent=extra>=1?`Runs nonstop. Spare input would keep about ${Math.floor(extra+1e-9)} more machine${Math.floor(extra+1e-9)==1?'':'s'} busy.`:'Runs nonstop, with almost no spare input.';
+    v.hidden=false;
+  }
+}
+function renderBalance(C,u,L){
+  const rows=[];let total=0;
+  // skip ores you have not set up and nothing uses, to keep the table short
+  S.resources.forEach(x=>{const X='r:'+x.id;if(C.supply[X]===Infinity&&!C.used[X])return;rows.push({src:X,name:x.name||'Unnamed',sup:C.supply[X],used:C.used[X]||0})});
+  S.recipes.filter(r=>r.on!==false).forEach(r=>{const X='p:'+r.id;const sup=C.supply[X]||0,used=C.used[X]||0;
+    const price=parseQty(r.price);if(price>0)total+=Math.max(0,sup-used)*price;
+    rows.push({src:X,name:r.name||'Unnamed',sup,used,made:true})});
+  $('#balance').innerHTML=`<tr><th>Item</th><th>In ${L}</th><th>Used</th><th>Left</th></tr>`+
+    (rows.length?rows.map(o=>`<tr class="${o.sup===Infinity?'dim':''}"><td>${icoFor(o.src)}${esc(o.name)}</td><td>${o.sup===Infinity?'not set':short(o.sup*u)}</td><td>${short(o.used*u)}</td><td style="color:var(--good)">${o.sup===Infinity?'–':short(Math.max(0,o.sup-o.used)*u)}</td></tr>`).join(''):'<tr><td colspan="4" class="hint">Nothing yet.</td></tr>');
+  const t=$('#balTotal');t.hidden=!(total>0);
+  t.innerHTML=`Selling what's left of your made items earns <b>${short(total*u)}${L}</b>`;
+}
+
+/* ---------- Rate tab (unchanged from v1) ---------- */
+function renderRate(){
+  const uu=$('#rUnit').value, amt=num($('#rAmt'));
+  const per=uu==='idle'?idleS():+uu;
+  const ps=per>0?amt/per:0;
+  const rows=[['Per second',ps],['Per minute',ps*60],['Per hour',ps*3600],['Idle '+idleShort(),ps*idleS(),true]];
+  $('#rOut').innerHTML=rows.map(([l,v,hl])=>`<button type="button" class="rate${hl?' hl':''}" data-copy="${full(v)}"><span class="lbl">${l}</span><span class="v">${short(v)}</span><span class="full">${full(v)}</span></button>`).join('');
+  store.set('rate',{amt:$('#rAmt').value,unit:uu});
+}
+$('#rOut').addEventListener('click',e=>{const b=e.target.closest('[data-copy]');if(b)copy(b.dataset.copy.replace(/,/g,''))});
+['#rAmt','#rUnit'].forEach(s=>$(s).addEventListener('input',renderRate));
+$('#rUnit').addEventListener('change',renderRate);
+
+/* ---------- export / import ----------
+   The export is one JSON object holding the same values that are saved as wic_v2, wic_idle and wic_rate.
+   Import also accepts a raw Scriptable save file (keys v2 / idle / rate). */
+function exportData(){
+  syncLevel();
+  return JSON.stringify({wic_v2:S,wic_idle:$('#idleH').value,wic_rate:{amt:$('#rAmt').value,unit:$('#rUnit').value}});
+}
+function renderExport(){const ta=$('#expText');if(document.activeElement!==ta)ta.value=exportData()}
+function copyExport(){
+  const ta=$('#expText');ta.value=exportData();
+  const fallback=()=>{let ok=false;try{ta.focus();ta.setSelectionRange(0,ta.value.length);ok=document.execCommand('copy')}catch(e){}
+    toast(ok?'Copied all data':'Select all the text above and copy it')};
+  try{navigator.clipboard.writeText(ta.value).then(()=>toast('Copied all data'),fallback)}catch(e){fallback()}
+}
+function parseBackup(txt){
+  txt=String(txt||'').trim();
+  if(!txt)throw 'Paste your exported data into the box first.';
+  let o;try{o=JSON.parse(txt)}catch(e){throw 'This is not valid JSON. Copy the whole export, from the first { to the last }, and try again.'}
+  if(!o||typeof o!=='object'||Array.isArray(o))throw 'This is not an Idle Forge export.';
+  if(!('wic_v2' in o)&&o.v2&&typeof o.v2==='object')o={wic_v2:o.v2,wic_idle:o.idle,wic_rate:o.rate};
+  const v=o.wic_v2;
+  if(!v||typeof v!=='object'||Array.isArray(v))throw 'No "wic_v2" data found. This is not an Idle Forge export.';
+  const lvs=Array.isArray(v.levels)&&v.levels.length?v.levels:null;
+  if(!lvs&&!Array.isArray(v.recipes))throw 'The data has no levels or recipes, so there is nothing to import.';
+  (lvs||[{name:'Level 1',resources:v.resources||[],recipes:v.recipes}]).forEach((l,i)=>{
+    const nm=`Level "${(l&&l.name)||i+1}"`;
+    if(!l||typeof l!=='object'||!Array.isArray(l.resources)||!Array.isArray(l.recipes))throw `${nm} is damaged: its resources or recipes are missing.`;
+    if(l.recipes.some(r=>!r||typeof r!=='object'||!Array.isArray(r.ings)))throw `${nm} has a damaged recipe (no ingredient list).`;
+  });
+  if(o.wic_idle!=null&&typeof o.wic_idle!=='string'&&typeof o.wic_idle!=='number')throw '"wic_idle" should be a number of hours.';
+  if(o.wic_rate!=null&&(typeof o.wic_rate!=='object'||!('amt' in o.wic_rate)))throw '"wic_rate" is damaged.';
+  return o;
+}
+function applyBackup(o){
+  const v=o.wic_v2;
+  if(Array.isArray(v.levels)&&v.levels.length&&!Array.isArray(v.recipes)){const l=v.levels.find(l=>l.id===v.cur)||v.levels[0];v.resources=l.resources;v.recipes=l.recipes}
+  if(o.wic_idle!=null){$('#idleH').value=o.wic_idle;store.set('idle',String(o.wic_idle))}
+  if(o.wic_rate){$('#rAmt').value=o.wic_rate.amt;$('#rUnit').value=o.wic_rate.unit||'1'}
+  S=v;S.tab='res';prepState();bindLevel();
+  store.set('v2',S);
+  renderRate();renderLevels();rerender();
+}
+let pendingImport=null;
+function impMsg(text,cls){const m=$('#impMsg');m.textContent=text;m.className='bk-msg'+(cls?' '+cls:'');m.hidden=!text}
+$('#expCopy').addEventListener('click',copyExport);
+$('#impBtn').addEventListener('click',()=>{
+  $('#impConfirm').hidden=true;pendingImport=null;
+  try{pendingImport=parseBackup($('#impText').value)}catch(err){impMsg(typeof err==='string'?err:'Could not read this data.','bad');return}
+  impMsg('');
+  const v=pendingImport.wic_v2, lvs=Array.isArray(v.levels)&&v.levels.length?v.levels:[{recipes:v.recipes}];
+  const nr=lvs.reduce((a,l)=>a+l.recipes.length,0);
+  $('#impSummary').textContent=`Replace everything saved on this device with the pasted data (${lvs.length} level${lvs.length==1?'':'s'}, ${nr} recipe${nr==1?'':'s'})? Your current levels and recipes will be gone. Copy the export above first if you want to keep them.`;
+  $('#impConfirm').hidden=false;
+});
+$('#impNo').addEventListener('click',()=>{pendingImport=null;$('#impConfirm').hidden=true;impMsg('Import cancelled. Nothing was changed.')});
+$('#impYes').addEventListener('click',()=>{
+  if(!pendingImport)return;const o=pendingImport;pendingImport=null;
+  $('#impConfirm').hidden=true;$('#impText').value='';
+  try{applyBackup(o)}catch(e){impMsg('Import failed: '+(e&&e.message||e),'bad');return}
+  impMsg('Data imported.','ok');toast('Data imported');
+});
+$('#impText').addEventListener('input',()=>{if(pendingImport){pendingImport=null;$('#impConfirm').hidden=true}});
+
+/* ---------- tabs ---------- */
+function showTab(t){
+  S.tab=t;
+  $$('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
+  ['rate','res','smelter','crafter'].forEach(k=>$('#p-'+k).hidden=k!==t);
+  // clear the hidden recipe tab so its old editor can't be mistaken for the open one
+  ['smelter','crafter'].forEach(k=>{if(k!==t)$('#p-'+k).innerHTML=''});
+  $('#perRow').hidden=t==='rate';
+  $('#lvRow').hidden=t==='rate';if(t==='rate'){$('#lvEdit').hidden=true;$('#lvEditBtn').textContent='Edit'}
+  if(t==='res')renderResources();
+  if(t==='smelter'||t==='crafter'){renderList(t);setSelects()}
+  update();
+}
+function rerender(){showTab(S.tab||'smelter')}
+
+/* ---------- editing ---------- */
+function onField(e){
+  const el=e.target;
+  if(el.type==='checkbox'&&e.type!=='change')return;
+  if(el.dataset.quickOn){const r=recById(el.dataset.quickOn);if(r){r.on=el.checked;toast(`${r.name||'Recipe'} ${r.on?'running':'paused'}`);rerender()}return}
+  if(el.dataset.bonus){const [k,f]=el.dataset.bonus.split('.');S.bonus[k][f]=el.value;update();return}
+  if(el.dataset.rf){const x=resById(el.closest('[data-res]').dataset.res);if(x){x[el.dataset.rf]=el.value;update()}return}
+  const f=el.dataset.f;if(!f)return;
+  const card=el.closest('.rec');if(!card)return;const r=recById(card.dataset.rid);if(!r)return;
+  if(f==='min'||f==='sec'){const mi=num(card.querySelector('[data-f="min"]')),se=num(card.querySelector('[data-f="sec"]'));r.time=String(mi*60+se)}
+  else if(f==='on'){r.on=el.checked;rerender();return}
+  else if(f==='src'||f==='qty'){const row=el.closest('[data-ing]');r.ings[+row.dataset.ing][f]=el.value;if(f==='src')row.querySelector('[data-ico]').dataset.ico=el.value}
+  else r[f]=el.value;
+  update();
+}
+document.addEventListener('input',onField);
+document.addEventListener('change',e=>{if(e.target.matches('select[data-f],input[type=checkbox]'))onField(e)});
+
+/* two-tap delete: first tap arms the button, second tap within 3 s removes */
+function armOrDo(btn,fn){
+  if(btn.classList.contains('arm')){fn();return}
+  $$('.del.arm').forEach(b=>{b.classList.remove('arm');b.textContent=b.dataset.label||'✕'});
+  btn.dataset.label=btn.textContent;btn.classList.add('arm');btn.textContent='Remove';
+  setTimeout(()=>{if(btn.isConnected&&btn.classList.contains('arm')){btn.classList.remove('arm');btn.textContent=btn.dataset.label}},3000);
+}
+function withUndo(msg,fn){syncLevel();const snap=JSON.stringify(S);fn();rerender();
+  $$('.del.arm').forEach(b=>{b.classList.remove('arm');b.textContent=b.dataset.label||'✕'});toast(msg,()=>{S=JSON.parse(snap);bindLevel();renderLevels();rerender();toast('Restored')})}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.tab){showTab(t.dataset.tab);return}
+  if(t.dataset.view){S.view=t.dataset.view;update();return}
+  if(t.dataset.sort){const [k,v]=t.dataset.sort.split(':');S.sort=S.sort||{};S.sort[k]=v;rerender();return}
+  if(t.dataset.toggle){S.open=S.open===t.dataset.toggle?null:t.dataset.toggle;rerender();return}
+  if(t.dataset.add){const r={id:uid(),kind:t.dataset.add,name:'',time:'',count:'1',price:'',on:true,ings:[{src:'',qty:''}]};S.recipes.push(r);S.open=r.id;rerender();return}
+  if(t.dataset.addIng!=null){const r=recById(t.dataset.addIng);r.ings.push({src:'',qty:''});rerender();return}
+  if(t.hasAttribute('data-add-res')){S.resources.push({id:uid(),name:'',inc:''});rerender();return}
+  if(t.dataset.move){const r=recById(t.dataset.move);r.kind=r.kind==='smelter'?'crafter':'smelter';toast(`Moved to ${r.kind}s`);showTab(r.kind);return}
+  if(t.dataset.del){
+    armOrDo(t,()=>{
+      const d=t.dataset.del;
+      if(d==='ing'){const r=recById(t.dataset.id);withUndo('Ingredient removed',()=>r.ings.splice(+t.dataset.i,1))}
+      else if(d==='res'){const x=resById(t.dataset.id);withUndo(`Removed ${x.name||'resource'}`,()=>{S.resources=S.resources.filter(y=>y!==x)})}
+      else if(d==='lv'){
+        if(S.levels.length<2){toast('This is your only level. Create another first.');return}
+        const lv=curLevel();
+        withUndo(`Deleted ${lv.name||'level'}`,()=>{S.levels=S.levels.filter(l=>l!==lv);S.cur=S.levels[0].id;S.open=null;bindLevel();renderLevels()});
+      }
+      else if(d==='rec'){const r=recById(t.dataset.id);withUndo(`Deleted ${r.name||'recipe'}`,()=>{S.recipes=S.recipes.filter(y=>y!==r);S.open=null})}
+    });
+  }
+});
+$('#lvSel').addEventListener('change',e=>{switchLevel(e.target.value);toast(`Loaded ${curLevel().name}`)});
+$('#lvNew').addEventListener('click',newLevel);
+$('#lvDup').addEventListener('click',dupLevel);
+$('#lvEditBtn').addEventListener('click',()=>{const p=$('#lvEdit');p.hidden=!p.hidden;$('#lvEditBtn').setAttribute('aria-expanded',!p.hidden);$('#lvEditBtn').textContent=p.hidden?'Edit':'Done'});
+$('#lvName').addEventListener('input',e=>{curLevel().name=e.target.value;const o=$('#lvSel').selectedOptions[0];if(o)o.textContent=e.target.value||'Unnamed level';save()});
+$('#idleH').addEventListener('input',()=>{store.set('idle',$('#idleH').value);renderRate();update()});
+
+/* ---------- k / M / B / T bar ----------
+   Shown only from the focus event. Showing it from touch or click events made iOS treat the
+   first tap as a hover, so the field needed a second tap before you could type. */
+const sfx=document.createElement('div');sfx.id='sfx';sfx.hidden=true;
+sfx.innerHTML=['k','M','B','T'].map(s=>`<button type="button" data-s="${s}">${s}</button>`).join('')+'<button type="button" class="close" data-close="1" aria-label="Close">✕</button>';
+document.body.appendChild(sfx);
+let sfxTarget=null;
+function placeSfx(){
+  if(!sfxTarget)return;sfx.hidden=false;
+  const r=sfxTarget.getBoundingClientRect(),w=sfx.offsetWidth;
+  sfx.style.top=(r.bottom+window.scrollY+4)+'px';
+  sfx.style.left=Math.max(8,Math.min(r.left+window.scrollX,document.documentElement.clientWidth-w-8))+'px';
+}
+document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input.qty')){sfxTarget=e.target;placeSfx()}else{sfx.hidden=true;sfxTarget=null}});
+document.addEventListener('focusout',e=>{if(e.target===sfxTarget)setTimeout(()=>{if(document.activeElement!==sfxTarget){sfx.hidden=true;sfxTarget=null}},200)});
+sfx.addEventListener('pointerdown',e=>e.preventDefault());
+sfx.addEventListener('mousedown',e=>e.preventDefault());
+sfx.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||!sfxTarget)return;
+  if(b.dataset.close){sfx.hidden=true;return}
+  sfxTarget.value=sfxTarget.value.trim().replace(/[kmbtq]$/i,'')+b.dataset.s;
+  sfxTarget.dispatchEvent(new Event('input',{bubbles:true}));
+});
+window.addEventListener('resize',()=>{if(!sfx.hidden)placeSfx()});
+
+/* ---------- start ---------- */
+$('#idleH').value=store.get('idle','4');
+const rr=store.get('rate',null);if(rr){$('#rAmt').value=rr.amt;$('#rUnit').value=rr.unit}
+renderRate();
+renderLevels();
+const startTab=location.hash.slice(1);
+showTab(['rate','res','smelter','crafter'].includes(startTab)?startTab:(S.tab||'smelter'));
+if(S.migrated){delete S.migrated;save();setTimeout(()=>toast('Your v1 recipes were brought over. Check the Income tab.'),400)}
+if(S.example){delete S.example;save();setTimeout(()=>toast('Example recipes. Replace them with yours.'),400)}
+
+/* ---------- offline: service worker (web only, never inside Scriptable) ---------- */
+if(!NATIVE&&'serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').then(reg=>reg.update()).catch(()=>{})});
+}
+</script>
